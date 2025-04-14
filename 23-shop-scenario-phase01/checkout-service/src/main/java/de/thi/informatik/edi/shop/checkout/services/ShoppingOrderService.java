@@ -4,6 +4,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import de.thi.informatik.edi.shop.checkout.connectors.KafkaProducer;
 import de.thi.informatik.edi.shop.checkout.connectors.dto.AddCartEntryDto;
 import de.thi.informatik.edi.shop.checkout.connectors.dto.RemoveCartEntryDto;
 import lombok.SneakyThrows;
@@ -19,9 +20,11 @@ import jakarta.annotation.PostConstruct;
 @Service
 public class ShoppingOrderService {
 	private ShoppingOrderRepository orders;
+	private KafkaProducer producer;
 
-	public ShoppingOrderService(@Autowired ShoppingOrderRepository orders) {
+	public ShoppingOrderService(@Autowired ShoppingOrderRepository orders, @Autowired KafkaProducer producer) {
 		this.orders = orders;
+		this.producer = producer;
 	}
 	
 	@PostConstruct
@@ -109,6 +112,9 @@ public class ShoppingOrderService {
 		ShoppingOrder order = findById(id);
 		if(order.getStatus().equals(ShoppingOrderStatus.CREATED)) {
 			order.setStatus(ShoppingOrderStatus.PLACED);
+
+			this.producer.updateOrder(order);
+
 			this.orders.save(order);
 		}
 	}
