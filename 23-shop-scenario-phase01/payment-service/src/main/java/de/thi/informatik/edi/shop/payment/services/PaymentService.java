@@ -3,7 +3,11 @@ package de.thi.informatik.edi.shop.payment.services;
 import java.util.Optional;
 import java.util.UUID;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import de.thi.informatik.edi.shop.payment.connectors.dto.UpdateOrderDto;
+import lombok.SneakyThrows;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
 
 import de.thi.informatik.edi.shop.payment.model.Payment;
@@ -17,6 +21,31 @@ public class PaymentService {
 
 	public PaymentService(@Autowired PaymentRepository payments) {
 		this.payments = payments;
+	}
+
+	@SneakyThrows
+	@KafkaListener(groupId = "payment-service", topics = "order-update")
+	private void receiveOrderUpdate(String dtoJson) {
+		ObjectMapper objectMapper = new ObjectMapper();
+		UpdateOrderDto dto = objectMapper.readValue(dtoJson, UpdateOrderDto.class);
+
+		Payment payment = getOrCreateByOrderRef(dto.getOrderId());
+
+		updatePrice(
+				payment.getId(),
+				dto.getPrice()
+		);
+
+		updateData(
+				payment.getId(),
+				dto.getFirstName(),
+				dto.getLastName(),
+				dto.getStreet(),
+				dto.getZipCode(),
+				dto.getCity()
+		);
+
+		System.out.println(dtoJson);
 	}
 
 	public Payment findById(UUID id) {
