@@ -3,6 +3,7 @@ package de.thi.informatik.edi.shop.shopping.services;
 import java.util.Optional;
 import java.util.UUID;
 
+import de.thi.informatik.edi.shop.shopping.connectors.KafkaProducer;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -20,10 +21,12 @@ public class CartService {
 	
 	private CartRepository carts;
 	private ArticleService articles;
+	private KafkaProducer producer;
 
-	public CartService(@Autowired CartRepository carts, @Autowired ArticleService articles) {
+	public CartService(@Autowired CartRepository carts, @Autowired ArticleService articles, @Autowired KafkaProducer producer) {
 		this.carts = carts;
 		this.articles = articles;
+		this.producer = producer;
 	}
 	
 	public UUID createCart() {
@@ -46,6 +49,8 @@ public class CartService {
 			throw new IllegalArgumentException("Article with ID " + id.toString() + " not found");
 		}
 		CartEntry entry = cart.get().addArticle(articleRef.get());
+		producer.addCartEntry(id, entry);
+
 		this.carts.save(cart.get());
 	}
 
@@ -55,6 +60,8 @@ public class CartService {
 			throw new IllegalArgumentException("Element with ID " + id.toString() + " not found");
 		}
 		CartEntry entry = cart.get().deleteArticle(article);
+		producer.removeCartEntry(id, entry);
+
 		this.carts.save(cart.get());
 	}
 
