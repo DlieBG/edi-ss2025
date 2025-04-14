@@ -3,6 +3,7 @@ package de.thi.informatik.edi.shop.checkout.connectors.dto;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 
+import java.util.List;
 import java.util.UUID;
 
 @Data
@@ -15,4 +16,6 @@ public class UpdateOrderDto {
     private String street;
     private String zipCode;
     private String city;
+    private UpdateOrderStatusDto status;
+    private List<UpdateOrderItemDto> items;
 }
