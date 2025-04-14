@@ -1,7 +1,7 @@
 version: "3"
 services:
   kafka:
-    image: 'bitnami/kafka:3.6.0'
+    image: 'docker.io/bitnami/kafka:3.6.0'
     ports:
       - '9092:9092'
     environment:
@@ -20,7 +20,7 @@ services:
 
   # Init script for topics, might be changed
   init-kafka:
-    image: 'bitnami/kafka:3.4'
+    image: 'docker.io/bitnami/kafka:3.6.0'
     depends_on:
       - kafka
     entrypoint: [ '/bin/sh', '-c' ]
@@ -43,7 +43,7 @@ services:
 
   # Starts No-SQL database, used by shopping, checkout, payment and warehouse service
   mongodb:
-    image: mongo:6-jammy
+    image: docker.io/library/mongo:6-jammy
     volumes:
       - mongo_data:/data/db
     restart: unless-stopped
@@ -52,29 +52,29 @@ services:
 
   # Starts MQTT broker, used between warehouse and shop infrastructure, events has to be handled and forwarded into Kafka
   mosquitto:
-    image: eclipse-mosquitto
+    image: docker.io/library/eclipse-mosquitto
     volumes:
       - mosquitto_data:/mosquitto/data
       - mosquitto_log:/mosquitto/log
-      - ./iot-broker/mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - ./iot-broker/mosquitto.conf:/mosquitto/config/mosquitto.conf:Z
     restart: unless-stopped
     ports:
       - 1883:1883
   
   # Kafka UI
   kui:
-    image: provectuslabs/kafka-ui
+    image: docker.io/provectuslabs/kafka-ui
     restart: unless-stopped
     ports:
       - 8090:8080
     environment:
       - DYNAMIC_CONFIG_ENABLED=true
     volumes:
-      - ./kui/config.yml:/etc/kafkaui/dynamic_config.yaml
+      - ./kui/config.yml:/etc/kafkaui/dynamic_config.yaml:Z
 
   # Mongo UI
   mongo-express:
-    image: mongo-express
+    image: docker.io/library/mongo-express
     restart: unless-stopped
     ports:
       - "8091:8081"
