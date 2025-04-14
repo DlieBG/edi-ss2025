@@ -5,6 +5,7 @@ import java.util.UUID;
 import java.util.function.Consumer;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import de.thi.informatik.edi.shop.warehouse.connectors.KafkaProducer;
 import de.thi.informatik.edi.shop.warehouse.connectors.dto.UpdateOrderDto;
 import de.thi.informatik.edi.shop.warehouse.connectors.dto.UpdateOrderStatusDto;
 import lombok.SneakyThrows;
@@ -20,8 +21,11 @@ public class ShippingService {
 	
 	private ShippingRepository repository;
 
-	public ShippingService(@Autowired ShippingRepository repository) {
+	private KafkaProducer producer;
+
+	public ShippingService(@Autowired ShippingRepository repository, @Autowired KafkaProducer producer) {
 		this.repository = repository;
+		this.producer = producer;
 	}
 
 	@SneakyThrows
@@ -92,7 +96,7 @@ public class ShippingService {
 			Shipping shipping = optional.get();
 			shipping.doShipping();
 
-			
+			this.producer.updateShipping(shipping);
 
 			this.repository.save(shipping);
 		} else {
