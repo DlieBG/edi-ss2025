@@ -137,6 +137,9 @@ public class ShoppingOrderService {
 		ShoppingOrder order = this.findById(id);
 		if(order.getStatus() == ShoppingOrderStatus.PLACED) {
 			order.setStatus(ShoppingOrderStatus.PAYED);
+
+			this.producer.updateOrder(order);
+
 			this.orders.save(order);
 		}
 	}
