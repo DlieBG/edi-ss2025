@@ -6,6 +6,7 @@ import java.util.UUID;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import de.thi.informatik.edi.shop.payment.connectors.KafkaProducer;
 import de.thi.informatik.edi.shop.payment.connectors.dto.UpdateOrderDto;
+import de.thi.informatik.edi.shop.payment.connectors.dto.UpdateOrderStatusDto;
 import lombok.SneakyThrows;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -33,21 +34,23 @@ public class PaymentService {
 		ObjectMapper objectMapper = new ObjectMapper();
 		UpdateOrderDto dto = objectMapper.readValue(dtoJson, UpdateOrderDto.class);
 
-		Payment payment = getOrCreateByOrderRef(dto.getOrderId());
+		if (dto.getStatus() == UpdateOrderStatusDto.PLACED) {
+			Payment payment = getOrCreateByOrderRef(dto.getOrderId());
 
-		updatePrice(
-				payment.getId(),
-				dto.getPrice()
-		);
+			updatePrice(
+					payment.getId(),
+					dto.getPrice()
+			);
 
-		updateData(
-				payment.getId(),
-				dto.getFirstName(),
-				dto.getLastName(),
-				dto.getStreet(),
-				dto.getZipCode(),
-				dto.getCity()
-		);
+			updateData(
+					payment.getId(),
+					dto.getFirstName(),
+					dto.getLastName(),
+					dto.getStreet(),
+					dto.getZipCode(),
+					dto.getCity()
+			);
+		}
 	}
 
 	public Payment findById(UUID id) {
