@@ -4,6 +4,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import de.thi.informatik.edi.shop.payment.connectors.KafkaProducer;
 import de.thi.informatik.edi.shop.payment.connectors.dto.UpdateOrderDto;
 import lombok.SneakyThrows;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,8 +20,11 @@ public class PaymentService {
 
 	private PaymentRepository payments;
 
-	public PaymentService(@Autowired PaymentRepository payments) {
+	private KafkaProducer producer;
+
+	public PaymentService(@Autowired PaymentRepository payments, @Autowired KafkaProducer producer) {
 		this.payments = payments;
+		this.producer = producer;
 	}
 
 	@SneakyThrows
@@ -44,8 +48,6 @@ public class PaymentService {
 				dto.getZipCode(),
 				dto.getCity()
 		);
-
-		System.out.println(dtoJson);
 	}
 
 	public Payment findById(UUID id) {
@@ -72,6 +74,9 @@ public class PaymentService {
 		Payment payment = this.findById(id);
 		PaymentStatus before = payment.getStatus();
 		payment.pay();
+
+		this.producer.updatePayment(payment);
+
 		this.payments.save(payment);
 	}
 

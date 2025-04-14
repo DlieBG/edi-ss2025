@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import de.thi.informatik.edi.shop.checkout.connectors.KafkaProducer;
 import de.thi.informatik.edi.shop.checkout.connectors.dto.AddCartEntryDto;
 import de.thi.informatik.edi.shop.checkout.connectors.dto.RemoveCartEntryDto;
+import de.thi.informatik.edi.shop.checkout.connectors.dto.UpdatePaymentDto;
 import lombok.SneakyThrows;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -57,6 +58,15 @@ public class ShoppingOrderService {
 				dto.getCartId(),
 				dto.getArticleId()
 		);
+	}
+
+	@SneakyThrows
+	@KafkaListener(groupId = "checkout-service", topics = "payment-update")
+	private void receivePaymentUpdate(String dtoJson) {
+		ObjectMapper objectMapper = new ObjectMapper();
+		UpdatePaymentDto dto = objectMapper.readValue(dtoJson, UpdatePaymentDto.class);
+
+		updateOrderIsPayed(dto.getOrderId());
 	}
 	
 	public void addItemToOrderByCartRef(UUID cartRef, UUID article, String name, double price, int count) {
