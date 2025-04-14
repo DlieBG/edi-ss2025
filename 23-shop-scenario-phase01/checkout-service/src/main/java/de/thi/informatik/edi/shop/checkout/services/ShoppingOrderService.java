@@ -3,7 +3,12 @@ package de.thi.informatik.edi.shop.checkout.services;
 import java.util.Optional;
 import java.util.UUID;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import de.thi.informatik.edi.shop.checkout.connectors.dto.AddCartEntryDto;
+import de.thi.informatik.edi.shop.checkout.connectors.dto.RemoveCartEntryDto;
+import lombok.SneakyThrows;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
 
 import de.thi.informatik.edi.shop.checkout.model.ShoppingOrder;
@@ -21,23 +26,50 @@ public class ShoppingOrderService {
 	
 	@PostConstruct
 	private void init() {
+
+	}
+
+	@SneakyThrows
+    @KafkaListener(groupId = "checkout-service", topics = "shopping-cart-add")
+	private void receiveAddShoppingCard(String dtoJson) {
+		ObjectMapper objectMapper = new ObjectMapper();
+		AddCartEntryDto dto = objectMapper.readValue(dtoJson, AddCartEntryDto.class);
+
+		addItemToOrderByCartRef(
+				dto.getCartId(),
+				dto.getArticleId(),
+				dto.getName(),
+				dto.getPrice(),
+				dto.getCount()
+		);
+	}
+
+	@SneakyThrows
+	@KafkaListener(groupId = "checkout-service", topics = "shopping-cart-remove")
+	private void receiveRemoveShoppingCard(String dtoJson) {
+		ObjectMapper objectMapper = new ObjectMapper();
+		RemoveCartEntryDto dto = objectMapper.readValue(dtoJson, RemoveCartEntryDto.class);
+
+		deleteItemFromOrderByCartRef(
+				dto.getCartId(),
+				dto.getArticleId()
+		);
 	}
 	
 	public void addItemToOrderByCartRef(UUID cartRef, UUID article, String name, double price, int count) {
 		ShoppingOrder order = this.getOrCreate(cartRef);
 		order.addItem(article, name, price, count);
 		this.orders.save(order);
-		
 	}
 	
-	private Optional<ShoppingOrder> findByCartRef(UUID cartRef) {
-		return this.orders.findByCartRef(cartRef);
-	}
-
 	public void deleteItemFromOrderByCartRef(UUID cartRef, UUID article) {
 		ShoppingOrder order = this.getOrCreate(cartRef);
 		order.removeItem(article);
 		this.orders.save(order);
+	}
+
+	private Optional<ShoppingOrder> findByCartRef(UUID cartRef) {
+		return this.orders.findByCartRef(cartRef);
 	}
 
 	public ShoppingOrder createOrderWithCartRef(UUID cartRef) {
