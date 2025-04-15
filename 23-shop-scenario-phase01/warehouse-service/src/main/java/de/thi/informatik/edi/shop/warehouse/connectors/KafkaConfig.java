@@ -15,4 +15,11 @@ public class KafkaConfig {
                 .build();
     }
 
+    @Bean
+    public NewTopic itemsPickTopic() {
+        return TopicBuilder.name("items-pick")
+                .partitions(10)
+                .replicas(1)
+                .build();
+    }
 }

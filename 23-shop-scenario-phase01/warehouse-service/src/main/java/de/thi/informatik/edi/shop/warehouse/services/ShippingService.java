@@ -97,6 +97,7 @@ public class ShippingService {
 			shipping.doShipping();
 
 			this.producer.updateShipping(shipping);
+			this.producer.pickItems(shipping.getItems());
 
 			this.repository.save(shipping);
 		} else {
