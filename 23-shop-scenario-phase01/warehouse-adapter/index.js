@@ -9,6 +9,9 @@ const kafka = new Kafka({
 const kafka_consumer = kafka.consumer({
     groupId: 'warehouse-adapter',
 });
+const kafka_producer = kafka.producer({
+    createPartitioner: Partitioners.DefaultPartitioner,
+});
 
 const mqtt_client = mqtt.connect('mqtt://localhost:1883');
 
@@ -21,12 +24,18 @@ mqtt_client.on('message', (topic, message) => {
     const id = /^article\/(.*?)\/stock$/.exec(topic)[1];
     const stock = parseInt(message);
 
-    console.log(id, stock)
-    // TODO
+    kafka_producer.send({
+        topic: 'stock-update',
+        messages: [
+            { value: JSON.stringify({ articleId: id, stock }) },
+        ],
+    });
 });
 
 // receive kafka 'items-pick' and publish to mqtt 'picked'
 const run = async () => {
+    await kafka_producer.connect();
+
     await kafka_consumer.connect();
     await kafka_consumer.subscribe({ topic: 'items-pick', fromBeginning: true });
 
