@@ -3,7 +3,11 @@ package de.thi.informatik.edi.shop.shopping.services;
 import java.util.Optional;
 import java.util.UUID;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import de.thi.informatik.edi.shop.shopping.connectors.dto.UpdateStockDto;
+import lombok.SneakyThrows;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
 
 import de.thi.informatik.edi.shop.shopping.model.Stock;
@@ -14,6 +18,18 @@ public class StockService {
 	private StockRepository stocks;
 	public StockService(@Autowired StockRepository stocks) {
 		this.stocks = stocks;
+	}
+
+	@SneakyThrows
+	@KafkaListener(groupId = "shopping-service", topics = "stock-update")
+	private void receiveStockUpdate(String dtoJson) {
+		ObjectMapper objectMapper = new ObjectMapper();
+		UpdateStockDto dto = objectMapper.readValue(dtoJson, UpdateStockDto.class);
+
+		updateStock(
+				dto.getArticleId(),
+				dto.getStock()
+		);
 	}
 	
 	private Stock getOrCreate(UUID article) {

@@ -5,6 +5,10 @@ spring:
     mongodb:
       database: shopping
       uuid-representation: standard
+
+  kafka:
+    bootstrap-servers: localhost:9092
+
 server:
   port: 8080
 

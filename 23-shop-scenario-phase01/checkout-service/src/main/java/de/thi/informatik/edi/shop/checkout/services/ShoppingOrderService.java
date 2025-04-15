@@ -3,7 +3,15 @@ package de.thi.informatik.edi.shop.checkout.services;
 import java.util.Optional;
 import java.util.UUID;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import de.thi.informatik.edi.shop.checkout.connectors.KafkaProducer;
+import de.thi.informatik.edi.shop.checkout.connectors.dto.AddCartEntryDto;
+import de.thi.informatik.edi.shop.checkout.connectors.dto.RemoveCartEntryDto;
+import de.thi.informatik.edi.shop.checkout.connectors.dto.UpdatePaymentDto;
+import de.thi.informatik.edi.shop.checkout.connectors.dto.UpdateShippingDto;
+import lombok.SneakyThrows;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
 
 import de.thi.informatik.edi.shop.checkout.model.ShoppingOrder;
@@ -14,30 +22,77 @@ import jakarta.annotation.PostConstruct;
 @Service
 public class ShoppingOrderService {
 	private ShoppingOrderRepository orders;
+	private KafkaProducer producer;
 
-	public ShoppingOrderService(@Autowired ShoppingOrderRepository orders) {
+	public ShoppingOrderService(@Autowired ShoppingOrderRepository orders, @Autowired KafkaProducer producer) {
 		this.orders = orders;
+		this.producer = producer;
 	}
 	
 	@PostConstruct
 	private void init() {
+
 	}
-	
+
+	@SneakyThrows
+    @KafkaListener(groupId = "checkout-service", topics = "shopping-cart-add")
+	private void receiveAddShoppingCard(String dtoJson) {
+		ObjectMapper objectMapper = new ObjectMapper();
+		AddCartEntryDto dto = objectMapper.readValue(dtoJson, AddCartEntryDto.class);
+
+		addItemToOrderByCartRef(
+				dto.getCartId(),
+				dto.getArticleId(),
+				dto.getName(),
+				dto.getPrice(),
+				dto.getCount()
+		);
+	}
+
+	@SneakyThrows
+	@KafkaListener(groupId = "checkout-service", topics = "shopping-cart-remove")
+	private void receiveRemoveShoppingCard(String dtoJson) {
+		ObjectMapper objectMapper = new ObjectMapper();
+		RemoveCartEntryDto dto = objectMapper.readValue(dtoJson, RemoveCartEntryDto.class);
+
+		deleteItemFromOrderByCartRef(
+				dto.getCartId(),
+				dto.getArticleId()
+		);
+	}
+
+	@SneakyThrows
+	@KafkaListener(groupId = "checkout-service", topics = "payment-update")
+	private void receivePaymentUpdate(String dtoJson) {
+		ObjectMapper objectMapper = new ObjectMapper();
+		UpdatePaymentDto dto = objectMapper.readValue(dtoJson, UpdatePaymentDto.class);
+
+		updateOrderIsPayed(dto.getOrderId());
+	}
+
+	@SneakyThrows
+	@KafkaListener(groupId = "checkout-service", topics = "shipping-update")
+	private void receiveShippingUpdate(String dtoJson) {
+		ObjectMapper objectMapper = new ObjectMapper();
+		UpdateShippingDto dto = objectMapper.readValue(dtoJson, UpdateShippingDto.class);
+
+		updateOrderIsShipped(dto.getOrderId());
+	}
+
 	public void addItemToOrderByCartRef(UUID cartRef, UUID article, String name, double price, int count) {
 		ShoppingOrder order = this.getOrCreate(cartRef);
 		order.addItem(article, name, price, count);
 		this.orders.save(order);
-		
 	}
 	
-	private Optional<ShoppingOrder> findByCartRef(UUID cartRef) {
-		return this.orders.findByCartRef(cartRef);
-	}
-
 	public void deleteItemFromOrderByCartRef(UUID cartRef, UUID article) {
 		ShoppingOrder order = this.getOrCreate(cartRef);
 		order.removeItem(article);
 		this.orders.save(order);
+	}
+
+	private Optional<ShoppingOrder> findByCartRef(UUID cartRef) {
+		return this.orders.findByCartRef(cartRef);
 	}
 
 	public ShoppingOrder createOrderWithCartRef(UUID cartRef) {
@@ -77,6 +132,9 @@ public class ShoppingOrderService {
 		ShoppingOrder order = findById(id);
 		if(order.getStatus().equals(ShoppingOrderStatus.CREATED)) {
 			order.setStatus(ShoppingOrderStatus.PLACED);
+
+			this.producer.updateOrder(order);
+
 			this.orders.save(order);
 		}
 	}
@@ -89,6 +147,9 @@ public class ShoppingOrderService {
 		ShoppingOrder order = this.findById(id);
 		if(order.getStatus() == ShoppingOrderStatus.PLACED) {
 			order.setStatus(ShoppingOrderStatus.PAYED);
+
+			this.producer.updateOrder(order);
+
 			this.orders.save(order);
 		}
 	}

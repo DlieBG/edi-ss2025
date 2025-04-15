@@ -3,7 +3,13 @@ package de.thi.informatik.edi.shop.payment.services;
 import java.util.Optional;
 import java.util.UUID;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import de.thi.informatik.edi.shop.payment.connectors.KafkaProducer;
+import de.thi.informatik.edi.shop.payment.connectors.dto.UpdateOrderDto;
+import de.thi.informatik.edi.shop.payment.connectors.dto.UpdateOrderStatusDto;
+import lombok.SneakyThrows;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
 
 import de.thi.informatik.edi.shop.payment.model.Payment;
@@ -15,8 +21,36 @@ public class PaymentService {
 
 	private PaymentRepository payments;
 
-	public PaymentService(@Autowired PaymentRepository payments) {
+	private KafkaProducer producer;
+
+	public PaymentService(@Autowired PaymentRepository payments, @Autowired KafkaProducer producer) {
 		this.payments = payments;
+		this.producer = producer;
+	}
+
+	@SneakyThrows
+	@KafkaListener(groupId = "payment-service", topics = "order-update")
+	private void receiveOrderUpdate(String dtoJson) {
+		ObjectMapper objectMapper = new ObjectMapper();
+		UpdateOrderDto dto = objectMapper.readValue(dtoJson, UpdateOrderDto.class);
+
+		if (dto.getStatus() == UpdateOrderStatusDto.PLACED) {
+			Payment payment = getOrCreateByOrderRef(dto.getOrderId());
+
+			updatePrice(
+					payment.getId(),
+					dto.getPrice()
+			);
+
+			updateData(
+					payment.getId(),
+					dto.getFirstName(),
+					dto.getLastName(),
+					dto.getStreet(),
+					dto.getZipCode(),
+					dto.getCity()
+			);
+		}
 	}
 
 	public Payment findById(UUID id) {
@@ -43,6 +77,9 @@ public class PaymentService {
 		Payment payment = this.findById(id);
 		PaymentStatus before = payment.getStatus();
 		payment.pay();
+
+		this.producer.updatePayment(payment);
+
 		this.payments.save(payment);
 	}
 
