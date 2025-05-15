@@ -15,15 +15,51 @@ import jakarta.annotation.PostConstruct;
 public class ShoppingOrderService {
 	private ShoppingOrderRepository orders;
 	private ShoppingOrderMessageProducerService messages;
+	private CartMessageConsumerService cartMessageConsumerService;
+	private PaymentMessageConsumerService paymentMessageConsumerService;
+	private ShippingMessageConsumerService shippingMessageConsumerService;
 
-	public ShoppingOrderService(@Autowired ShoppingOrderRepository orders, 
-			@Autowired ShoppingOrderMessageProducerService messages) {
+	public ShoppingOrderService(@Autowired ShoppingOrderRepository orders, @Autowired ShoppingOrderMessageProducerService messages, @Autowired CartMessageConsumerService cartMessageConsumerService, @Autowired PaymentMessageConsumerService paymentMessageConsumerService, @Autowired ShippingMessageConsumerService shippingMessageConsumerService) {
 		this.orders = orders;
 		this.messages = messages;
+		this.cartMessageConsumerService = cartMessageConsumerService;
+		this.paymentMessageConsumerService = paymentMessageConsumerService;
+		this.shippingMessageConsumerService = shippingMessageConsumerService;
 	}
 	
 	@PostConstruct
 	private void init() {
+		this.cartMessageConsumerService.getCreatedCartMessages()
+				.subscribe(message -> this.createOrderWithCartRef(
+						message.getId()
+				));
+
+		this.cartMessageConsumerService.getArticleAddedToCartMessages()
+				.subscribe(message -> this.addItemToOrderByCartRef(
+						message.getId(),
+						message.getArticle(),
+						message.getName(),
+						message.getPrice(),
+						message.getCount()
+				));
+
+		this.cartMessageConsumerService.getDeleteArticleFromCartMessages()
+				.subscribe(message -> this.deleteItemFromOrderByCartRef(
+						message.getId(),
+						message.getArticle()
+				));
+
+
+		this.paymentMessageConsumerService.getPayedPaymentMessages()
+				.subscribe(message -> this.updateOrderIsPayed(
+						message.getOrderRef()
+				));
+
+
+		this.shippingMessageConsumerService.getShippedShippingMessages()
+				.subscribe(message -> this.updateOrderIsPayed(
+						message.getOrderRef()
+				));
 	}
 	
 	public void addItemToOrderByCartRef(UUID cartRef, UUID article, String name, double price, int count) {
