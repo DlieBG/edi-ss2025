@@ -15,14 +15,16 @@ import jakarta.annotation.PostConstruct;
 public class ShoppingOrderService {
 	private ShoppingOrderRepository orders;
 	private ShoppingOrderMessageProducerService messages;
-	public CartMessageConsumerService cartMessageConsumerService;
+	private CartMessageConsumerService cartMessageConsumerService;
 	private PaymentMessageConsumerService paymentMessageConsumerService;
+	private ShippingMessageConsumerService shippingMessageConsumerService;
 
-	public ShoppingOrderService(@Autowired ShoppingOrderRepository orders, @Autowired ShoppingOrderMessageProducerService messages, @Autowired CartMessageConsumerService cartMessageConsumerService, @Autowired PaymentMessageConsumerService paymentMessageConsumerService) {
+	public ShoppingOrderService(@Autowired ShoppingOrderRepository orders, @Autowired ShoppingOrderMessageProducerService messages, @Autowired CartMessageConsumerService cartMessageConsumerService, @Autowired PaymentMessageConsumerService paymentMessageConsumerService, @Autowired ShippingMessageConsumerService shippingMessageConsumerService) {
 		this.orders = orders;
 		this.messages = messages;
 		this.cartMessageConsumerService = cartMessageConsumerService;
 		this.paymentMessageConsumerService = paymentMessageConsumerService;
+		this.shippingMessageConsumerService = shippingMessageConsumerService;
 	}
 	
 	@PostConstruct
@@ -49,6 +51,12 @@ public class ShoppingOrderService {
 
 
 		this.paymentMessageConsumerService.getPayedPaymentMessages()
+				.subscribe(message -> this.updateOrderIsPayed(
+						message.getOrderRef()
+				));
+
+
+		this.shippingMessageConsumerService.getShippedShippingMessages()
 				.subscribe(message -> this.updateOrderIsPayed(
 						message.getOrderRef()
 				));
