@@ -15,15 +15,35 @@ import jakarta.annotation.PostConstruct;
 public class ShoppingOrderService {
 	private ShoppingOrderRepository orders;
 	private ShoppingOrderMessageProducerService messages;
+	public CartMessageConsumerService cartMessageConsumerService;
 
-	public ShoppingOrderService(@Autowired ShoppingOrderRepository orders, 
-			@Autowired ShoppingOrderMessageProducerService messages) {
+	public ShoppingOrderService(@Autowired ShoppingOrderRepository orders, @Autowired ShoppingOrderMessageProducerService messages, @Autowired CartMessageConsumerService cartMessageConsumerService) {
 		this.orders = orders;
 		this.messages = messages;
+		this.cartMessageConsumerService = cartMessageConsumerService;
 	}
 	
 	@PostConstruct
 	private void init() {
+		this.cartMessageConsumerService.getCreatedCartMessages()
+				.subscribe(message -> this.createOrderWithCartRef(
+						message.getId()
+				));
+
+		this.cartMessageConsumerService.getArticleAddedToCartMessages()
+				.subscribe(message -> this.addItemToOrderByCartRef(
+						message.getId(),
+						message.getArticle(),
+						message.getName(),
+						message.getPrice(),
+						message.getCount()
+				));
+
+		this.cartMessageConsumerService.getDeleteArticleFromCartMessages()
+				.subscribe(message -> this.deleteItemFromOrderByCartRef(
+						message.getId(),
+						message.getArticle()
+				));
 	}
 	
 	public void addItemToOrderByCartRef(UUID cartRef, UUID article, String name, double price, int count) {

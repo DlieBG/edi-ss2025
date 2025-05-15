@@ -19,55 +19,58 @@ import de.thi.informatik.edi.shop.checkout.services.messages.CartMessage;
 import de.thi.informatik.edi.shop.checkout.services.messages.CreatedCartMessage;
 import de.thi.informatik.edi.shop.checkout.services.messages.DeleteArticleFromCartMessage;
 import jakarta.annotation.PostConstruct;
+import reactor.core.publisher.Flux;
 
 @Service
-public class CartMessageConsumerService implements MessageConsumerService.MessageConsumerServiceHandler {
+public class CartMessageConsumerService {
 	
 	private static Logger logger = LoggerFactory.getLogger(CartMessageConsumerService.class);
+
+	Flux<CartMessage> flux;
 
 	@Value("${kafka.cartTopic:cart}")
 	private String topic;
 	
 	private MessageConsumerService consumer;
-	private ShoppingOrderService orders;
 
-	public CartMessageConsumerService(@Autowired ShoppingOrderService orders, @Autowired MessageConsumerService consumer) {
-		this.orders = orders;
+	public CartMessageConsumerService(@Autowired MessageConsumerService consumer) {
 		this.consumer = consumer;
 	}
 	
 	@PostConstruct
 	private void init() {
-		this.consumer.register(topic, this);
+		this.flux = this.consumer.register(topic)
+				.map(message -> {
+					String value = message.value();
+					logger.info("Received message " + value);
+
+                    try {
+                        return new ObjectMapper()
+                                .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+                                .readValue(value, CartMessage.class);
+                    } catch (JsonProcessingException e) {
+						e.printStackTrace();
+                    }
+
+					return new CartMessage();
+                });
 	}
 
-	@Override
-	public void handle(String topic, String key, String value) {
-		logger.info("Received message " + value);
-		try {
-			CartMessage message = new ObjectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false).readValue(value, CartMessage.class);
-			if(message instanceof ArticleAddedToCartMessage) {
-				logger.info("Article added to cart " + ((ArticleAddedToCartMessage) message).getId());
-				this.orders.addItemToOrderByCartRef(
-						((ArticleAddedToCartMessage) message).getId(),
-						((ArticleAddedToCartMessage) message).getArticle(),
-						((ArticleAddedToCartMessage) message).getName(),
-						((ArticleAddedToCartMessage) message).getPrice(),
-						((ArticleAddedToCartMessage) message).getCount());
-			} else if(message instanceof DeleteArticleFromCartMessage) {
-				logger.info("Article removed from cart " + ((DeleteArticleFromCartMessage) message).getId());
-				this.orders.deleteItemFromOrderByCartRef(
-						((DeleteArticleFromCartMessage) message).getId(),
-						((DeleteArticleFromCartMessage) message).getArticle());
-			} else if(message instanceof CreatedCartMessage) {
-				logger.info("Cart created " + ((CreatedCartMessage) message).getId());
-				this.orders.createOrderWithCartRef(((CreatedCartMessage) message).getId());
+	public Flux<CreatedCartMessage> getCreatedCartMessages() {
+		return this.flux
+				.filter(message -> message instanceof CreatedCartMessage)
+				.map(message -> (CreatedCartMessage) message);
+	}
 
-			}
-		} catch (JsonMappingException e) {
-			e.printStackTrace();
-		} catch (JsonProcessingException e) {
-			e.printStackTrace();
-		}
+	public Flux<ArticleAddedToCartMessage> getArticleAddedToCartMessages() {
+		return this.flux
+				.filter(message -> message instanceof ArticleAddedToCartMessage)
+				.map(message -> (ArticleAddedToCartMessage) message);
+	}
+
+	public Flux<DeleteArticleFromCartMessage> getDeleteArticleFromCartMessages() {
+		return this.flux
+				.filter(message -> message instanceof DeleteArticleFromCartMessage)
+				.map(message -> (DeleteArticleFromCartMessage) message);
 	}
 }
