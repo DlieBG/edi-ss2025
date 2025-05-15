@@ -18,31 +18,31 @@ import org.springframework.core.task.TaskExecutor;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Sinks;
 
 @Service
 public class MessageConsumerService {
+	private static final Logger logger = LoggerFactory.getLogger(ShippingMessageConsumerService.class);
 
-	public static interface MessageConsumerServiceHandler {
-		public void handle(String topic, String key, String value);
-	}
+	Sinks.Many<ConsumerRecord<String, String>> many = Sinks.many().multicast().onBackpressureBuffer();
+	Flux<ConsumerRecord<String, String>> flux;
 
-	private static Logger logger = LoggerFactory.getLogger(ShippingMessageConsumerService.class);
-	
 	@Value("${kafka.servers:localhost:9092}")
 	private String servers;
 	@Value("${kafka.group:checkout}")
 	private String group;
 
-	private Map<String, MessageConsumerServiceHandler> topics;
+	private final Set<String> topics;
 	private KafkaConsumer<String, String> consumer;
 	private boolean running;
 	private boolean hasToUpdate;
-	private TaskExecutor executor;
+	private final TaskExecutor executor;
 	
 	public MessageConsumerService(@Autowired TaskExecutor executor) {
 		this.executor = executor;
 		this.running = false;
-		this.topics = new HashMap<>();
+		this.topics = new HashSet<>();
 	}
 	
 	@PostConstruct
@@ -57,13 +57,6 @@ public class MessageConsumerService {
 		this.consumer = new KafkaConsumer<>(config);
 	}
 
-	private void handle(ConsumerRecord<String, String> el) {
-		MessageConsumerServiceHandler handler = this.topics.get(el.topic());
-		if(handler != null) {
-			handler.handle(el.key(), el.value(), el.value());
-		}
-	}
-
 	private void start() {
 		if(!this.running) {
 			logger.info("Start consumer thread");
@@ -71,14 +64,14 @@ public class MessageConsumerService {
 			this.executor.execute(() -> {
 				while (running) {
 					if(hasToUpdate) {
-						logger.info("Update subscription to " + this.topics.keySet());
-						consumer.subscribe(new ArrayList<>(this.topics.keySet()));
+						logger.info("Update subscription to " + this.topics);
+						consumer.subscribe(new ArrayList<>(this.topics));
 						hasToUpdate = false;
 					}
 					try {
-						if(consumer.subscription().size() > 0) {
+						if(!consumer.subscription().isEmpty()) {
 							ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(1));
-							records.forEach(el -> handle(el));
+							records.forEach(many::tryEmitNext);
 							consumer.commitSync();
 						} else {
 							Thread.sleep(1000);
@@ -88,14 +81,19 @@ public class MessageConsumerService {
 					}
 				}
 			});
+
+			this.flux = many.asFlux();
 		}
 	}
 
-	public synchronized void register(String topic, MessageConsumerServiceHandler handler) {
-		this.topics.put(topic, handler);
+	public synchronized Flux<ConsumerRecord<String, String>> register(String topic) {
+		this.topics.add(topic);
 		this.hasToUpdate = true;
 		logger.info("Add subscribe for " + topic);
 		this.start();
+
+		return this.flux
+				.filter(message -> message.topic().equals(topic));
 	}
 
 	@PreDestroy
