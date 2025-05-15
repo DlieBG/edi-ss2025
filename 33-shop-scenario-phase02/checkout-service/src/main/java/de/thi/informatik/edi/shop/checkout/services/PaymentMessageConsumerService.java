@@ -6,6 +6,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Properties;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -23,43 +24,55 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import de.thi.informatik.edi.shop.checkout.services.messages.PaymentMessage;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
+import reactor.core.publisher.Flux;
 
 @Service
-public class PaymentMessageConsumerService implements MessageConsumerService.MessageConsumerServiceHandler {
+public class PaymentMessageConsumerService {
 
 	private static Logger logger = LoggerFactory.getLogger(PaymentMessageConsumerService.class);
+
+	Flux<PaymentMessage> flux;
 
 	@Value("${kafka.paymentTopic:payment}")
 	private String topic;
 	
 	private MessageConsumerService consumer;
-	private ShoppingOrderService orders;
 
-	public PaymentMessageConsumerService(@Autowired ShoppingOrderService orders, @Autowired MessageConsumerService consumer) {
-		this.orders = orders;
+	public PaymentMessageConsumerService(@Autowired MessageConsumerService consumer) {
 		this.consumer = consumer;
 	}
 
 	@PostConstruct
 	private void init() {
-		this.consumer.register(topic, this);
+		this.flux = this.consumer.register(topic)
+				.map(message -> {
+					String value = message.value();
+					logger.info("Received message " + value);
+					try {
+						return new ObjectMapper()
+								.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+								.readValue(value, PaymentMessage.class);
+					} catch (JsonProcessingException e) {
+						e.printStackTrace();
+					}
+
+					return new PaymentMessage();
+				});
 	}
 
-	@Override
-	public void handle(String topic, String key, String value) {
-		logger.info("Received message " + value);
-		try {
-			PaymentMessage message = new ObjectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false).readValue(value, PaymentMessage.class);
-			logger.info("Update order " + message.getOrderRef());
-			if("PAYED".equals(message.getStatus())) {
-				this.orders.updateOrderIsPayed(message.getOrderRef());
-			} else if("PAYABLE".equals(message.getStatus())) {
-				logger.info("Ignore status change " + message.getStatus() + " for order " + message.getOrderRef() + " and payment " + message.getId());
-			} else {
-				logger.info("Unknown status change " + message.getStatus() + " for order " + message.getOrderRef() + " and payment " + message.getId());
-			}
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
+	public Flux<PaymentMessage> getPayedPaymentMessages() {
+		return this.flux
+				.filter(message -> message.getStatus().equals("PAYED"));
+	}
+
+	public Flux<PaymentMessage> getPayablePaymentMessages() {
+		return this.flux
+				.filter(message -> message.getStatus().equals("PAYABLE"));
+	}
+
+	public Flux<PaymentMessage> getUnknownPaymentMessages() {
+		return this.flux
+				.filter(message -> !message.getStatus().equals("PAYED"))
+				.filter(message -> !message.getStatus().equals("PAYABLE"));
 	}
 }

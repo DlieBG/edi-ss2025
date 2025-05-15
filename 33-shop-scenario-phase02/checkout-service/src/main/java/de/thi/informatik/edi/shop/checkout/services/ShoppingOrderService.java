@@ -16,11 +16,13 @@ public class ShoppingOrderService {
 	private ShoppingOrderRepository orders;
 	private ShoppingOrderMessageProducerService messages;
 	public CartMessageConsumerService cartMessageConsumerService;
+	private PaymentMessageConsumerService paymentMessageConsumerService;
 
-	public ShoppingOrderService(@Autowired ShoppingOrderRepository orders, @Autowired ShoppingOrderMessageProducerService messages, @Autowired CartMessageConsumerService cartMessageConsumerService) {
+	public ShoppingOrderService(@Autowired ShoppingOrderRepository orders, @Autowired ShoppingOrderMessageProducerService messages, @Autowired CartMessageConsumerService cartMessageConsumerService, @Autowired PaymentMessageConsumerService paymentMessageConsumerService) {
 		this.orders = orders;
 		this.messages = messages;
 		this.cartMessageConsumerService = cartMessageConsumerService;
+		this.paymentMessageConsumerService = paymentMessageConsumerService;
 	}
 	
 	@PostConstruct
@@ -43,6 +45,12 @@ public class ShoppingOrderService {
 				.subscribe(message -> this.deleteItemFromOrderByCartRef(
 						message.getId(),
 						message.getArticle()
+				));
+
+
+		this.paymentMessageConsumerService.getPayedPaymentMessages()
+				.subscribe(message -> this.updateOrderIsPayed(
+						message.getOrderRef()
 				));
 	}
 	
